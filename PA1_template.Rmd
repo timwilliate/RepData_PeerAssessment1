@@ -1,20 +1,99 @@
-# Reproducible Research: Peer Assessment 1
+---
+title: "PeerAssessment1"
+author: "timwilliate"
+date: "August 15, 2014"
+output: html_document
+---
 
+----
+#### Load the raw activity tracking dataset
+```{r load_raw_data, echo=TRUE}
+activityData <- read.csv("activity.csv")
+activityData_noNA <- subset(activityData, steps != 'NA')
+```
 
-## Loading and preprocessing the data
+#### Section 1: What is the mean total number of steps taken per day?
+Compute and plot a histogram of the total step count per day:
+```{r total_daily_steps, echo=TRUE}
+dailyTotalSteps <- aggregate(steps~date, activityData_noNA, sum)
+hist(dailyTotalSteps$steps, main = ("Histogram of Daily Total Step Count"), xlab = "Total Daily Steps", freq = TRUE)
+```
 
+The mean daily step count is:
+``` {r mean_daily_steps, echo=TRUE}
+mean(dailyTotalSteps$steps)
+```
 
+The median daily step count is:
+```{r median_daily_steps, echo=TRUE}
+median(dailyTotalSteps$steps)
+```
 
-## What is mean total number of steps taken per day?
+#### Section 2: What is the average daily activity pattern?
+Make a time series plot of the mean number of steps taken as fuction of 5-minute measurement interval:
+```{r, mean_steps_per_interval, echo=TRUE}
+meanStepsPerInterval <- aggregate(steps~interval, activityData_noNA, mean)
+plot(meanStepsPerInterval, type = 'l', main = ("Time Series of Mean Steps Per 5-Minute Interval"))
+```
 
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r, echo=TRUE}
+subset(meanStepsPerInterval, steps == max(meanStepsPerInterval[,2]))
+```
 
+#### Section 3: Imputing missing values
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r, echo=TRUE}
+nMissingValues <- nrow(activityData) - nrow(activityData_noNA)
+nMissingValues
+```
 
-## What is the average daily activity pattern?
+Devise a strategy for filling in all of the missing values in the dataset.  Below I chose to fill in missing values using the mean
+step count recorded over the entire set of equivalent 5-minute intervals:
+```{r, echo=TRUE}
+library(plyr)
+rowsWithNA <- subset(activityData, is.na(steps) == TRUE)
+estimateByMeans <- join(rowsWithNA, meanStepsPerInterval, by = "interval", type = "left")
+interpolatedDataSet <- rbind(activityData_noNA, estimateByMeans[,2:4])
+head(interpolatedDataSet)
+```
 
+Compute and plot a histogram of the total step count per day:
+```{r total_daily_steps_interpolated, echo=TRUE}
+dailyTotalStepsInterpolated <- aggregate(steps~date, interpolatedDataSet, sum)
+hist(dailyTotalStepsInterpolated$steps, main = ("Histogram of Daily Total Step Count"), xlab = "Total Daily Steps", freq = TRUE)
+```
 
+The mean daily step count is:
+``` {r mean_daily_steps_interpolated, echo=TRUE}
+mean(dailyTotalStepsInterpolated$steps)
+```
 
-## Imputing missing values
+The median daily step count is:
+```{r median_daily_steps_interpolated, echo=TRUE}
+median(dailyTotalStepsInterpolated$steps)
+```
 
+Imputing the missing values does not change the mean value of the daily step count from the previous estiamte.  The median daily step count changed by only a single step.  Overall the impact of imputing the missing values is neglible when measured at the level of mean and meadian daily step counts.
 
+#### Section 4: Are there differences in activity patterns between weekdays and weekends?
+Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day:
+```{r two_panel_plot, echo=TRUE}
+library(lubridate)
+interpolatedDataSet$date <- ymd(interpolatedDataSet$date)
 
-## Are there differences in activity patterns between weekdays and weekends?
+classifyDate <- function(date) {
+  if (weekdays(date) == "Saturday")  {"weekend"}
+  else if (weekdays(date) == "Sunday") {"weekend"}
+  else {"weekday"}
+  }
+
+interpolatedDataSet$wday <- lapply(interpolatedDataSet$date, classifyDate)
+interpolatedDataSet$wday <- as.factor(unlist(interpolatedDataSet$wday))
+collapse <- aggregate(steps~interval+wday, interpolatedDataSet, mean)
+
+library(ggplot2)
+g <- ggplot(collapse, aes(interval, steps)) 
+g <- g + geom_line() + facet_wrap(~wday, nrow=2, ncol=1) 
+g + labs(x = "Inerval", y = "Number of Steps")
+```
